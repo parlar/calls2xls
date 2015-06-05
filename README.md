@@ -1,4 +1,4 @@
-# vcf2xls
+# calls2xls
 A set of Perl scripts for intended to simplify variant calling and enable interpretation of NGS data in the clinical genetics setting. The scripts are, in their current state, taylored to be compatible with the the bcbio-nextgen pipeline and the Alamut Visual variant interpretation software.
 
 The scripts enable:
