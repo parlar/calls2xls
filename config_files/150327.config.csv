@@ -1,0 +1,9 @@
+#diseases: LQTS/SQTS/BrS/CPVT/IVF/HCM/HCM_stellan/DCM_LVNC/ARVC/RCM/FTAAD/FH/Pan_Arytmi/Pan_Kardiomyopati
+samplename,sex,coverage_interval,disease
+15-1095,male,/home/data_in/calling/haloplex/design_genelists/LKPN_hart_design_II.bed,DCM_LVNC
+15-0657,female,/home/data_in/calling/haloplex/design_genelists/LKPN_hart_design_II.bed,LQTS
+15-1164,male,/home/data_in/calling/haloplex/design_genelists/LKPN_hart_design_II.bed,LQTS
+15-1165,male,/home/data_in/calling/haloplex/design_genelists/LKPN_hart_design_II.bed,HCM
+15-1255,female,/home/data_in/calling/haloplex/design_genelists/LKPN_hart_design_II.bed,LQTS
+15-1359,female,/home/data_in/calling/haloplex/design_genelists/LKPN_hart_design_II.bed,LQTS
+

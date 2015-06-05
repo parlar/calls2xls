@@ -1,0 +1,4 @@
+#diseases: LQTS/SQTS/BrS/CPVT/IVF/HCM/HCM_stellan/DCM_LVNC/ARVC/RCM/FTAAD/FH/Pan_Arytmi/Pan_Kardiomyopati
+samplename,sex,coverage_interval,disease
+09-4289,female,/home/data_in/calling/haloplex/design_genelists/vll_design_merged_2.bed,HCM_stellan
+08-3416,male,/home/data_in/calling/haloplex/design_genelists/vll_design_merged_2.bed,HCM_stellan
