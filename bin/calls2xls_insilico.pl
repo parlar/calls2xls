@@ -30,8 +30,6 @@ if (!(@ARGV)){
 	close(FH);
     }
     print "\n";
-    
-
     exit 0;
 }
 

@@ -10,11 +10,12 @@ use Getopt::Long;
 
 $o{'in_silico'} = 0;
 $o{'help'} = 0;
-$o{'version'} = "v0.41";
+$o{'version'} = "v0.42";
+
 ## Read configs
-open (FH, "/home/data_in/calls2xls/calls2xls.cfg");
+open (FH, "</home/data_in/calls2xls/calls2xls.cfg");
 while ( $line = <FH> ) {
-    if($line !~ /#/ && $line !~ /\S/){
+    if($line !~ /#/ && $line =~ /\S/){
 	@tmp = split(/=/, $line);
 	foreach $row (@tmp) {
 	    $row =~ s/\s//g;
@@ -22,20 +23,35 @@ while ( $line = <FH> ) {
 	$c{$tmp[0]}=$tmp[1];
     }
 }
+close(FH);
 
 GetOptions (\%o, 'in_silico', "help", "data_root=s", "old_sample=s", "new_sample=s", "disease_indication=s", "disease_gene_file=s");
 if(!exists($o{'data_root'})){
     &helpmess();
     exit 0;
-} 
+}
+if($o{'help'}){
+    &helpmess();
+    exit 0;
+}
+if($o{'help'}){
+    &helpmess();
+    exit 0;
+}
+if($o{'in_silico'} && ((!exists($o{'old_sample'}) || !exists($o{'new_sample'})) || !exists($o{'disease_indication'})) || !exists($o{'disease_gene_file'})){
+    print "\nin silico run requires that options --old_sample --new_sample --disease_indication --disease_gene_file are set.\n";
+    &helpmess();
+    exit 0;
+}
+
 
 sub helpmess{
     print "\nversion: $o{'version'}\n";
     print "\nusage: calls2xls.pl [options]\n\n";
-    print "  -d, --data_root=path (required)\n";
+    print "  ---data_root=path (required)\n";
     print "    path to data root folder containing raw data and variant calls \n";
     print "    from bcbio-nextgen.\n";    
-    print "  -i, --in_silico\n";
+    print "  --in_silico\n";
     print "    run in silico.\n";
     print "  --old_sample=sample number, e.g. 15-1234\n";
     print "    with --in_silico: old sample number to transfer calling data from.\n";
@@ -46,12 +62,14 @@ sub helpmess{
     print "  --disease_gene_file=file\n";
     print "    disease gene file defining gene sets for disease indications.\n";
 
-    chomp(@disgenefiles = </home/data_in/calling/haloplex/design_genelists/*.txt>);
+    chomp(@disgenefiles = <$c{'designAndGeneListsRootPath'}/*.txt>);
     print "\n";
+    if(exists($disgenefiles[0])) {
+	print "disease gene files and disease indications:\n";
+    }
     foreach $file (@disgenefiles){
         @tmp = split(/\//, $file);
-        print "  disease gene file: $tmp[-1]:\n";
-	print "    disease indications:\n";
+        print "  $tmp[-1]:\n";
         open (FH, "<$file");
 	@diseases = ();
         while ( $line = <FH> ) {
@@ -70,6 +88,7 @@ sub helpmess{
 	}
 	print "     $dstr\n";
     }
+    print "\n";
 } 
 
 
@@ -90,7 +109,6 @@ $tm = localtime;
 $nowtime = sprintf("%04d.%02d.%02d-%02d.%02d.%02d", $tm->year+1900, ($tm->mon)+1, $tm->mday, $tm->hour, $tm->min, $tm->sec );
 
 $finalpath = $miseqroot . "/calling/final";
-$designAndGeneListsRootPath = "/home/data_in/calling/haloplex/design_genelists/";
 
 $samplesheetfile = $miseqroot . "/SampleSheet.csv";
 open(FH, "<$samplesheetfile");
@@ -139,22 +157,56 @@ foreach $sample ( sort { $b cmp $a } keys(%{$ssheet{'Data'}{'Description'}})) {
     $sampleC{$sample}{disease} = $ssheet{'Data'}{'Description'}{$sample}{'inquiry'};
     $sampleC{$sample}{genelist} = $ssheet{'Data'}{'Description'}{$sample}{'genelist'};
     $sampleC{$sample}{disease} =~ s/\s//g;
-    print "$sample $sampleC{$sample}{sex} $sampleC{$sample}{regions} $sampleC{$sample}{genelist} $sampleC{$sample}{disease}\n";
 }
 
-#print Dumper(\%ssheet);	
-
+if($o{'in_silico'}){
+    foreach $field ( sort { $b cmp $a } keys(%{$sampleC{$oldsample}})) {
+	$sampleC{$newsample}{$field} = $sampleC{$oldsample}{$field};
+    }
+    
+    $sampleC{$newsample}{genelist} = $c{'-disease_gene_file'};
+    $sampleC{$newsample}{disease} = $c{'disease_indication'};
+    
+    foreach $sample ( sort { $b cmp $a } keys(%sampleC)) {
+	if($sample ne $newsample){
+	    delete $sampleC{$sample};
+	}
+    }
+    
+    $newsamppath = $finalpath . "/" . $newsample;
+    
+    if(!-d $newsamppath){
+	system("mkdir $newsamppath");
+    }
+#    system("rm $finalpath/$newsample/*");
+#    system("cp -r $finalpath/$oldsample/* $finalpath/$newsample");
+#    system("rename s/$oldsample-/$newsample-/g $newsamppath/*");
+#    system("rm $newsamppath/sample*");
+#    system("rm -r $newsamppath/$oldsample");
+    
+    print "rm $finalpath/$newsample/*\n";
+    print "cp -r $finalpath/$oldsample/* $finalpath/$newsample\n";
+    print "rename s/$oldsample-/$newsample-/g $newsamppath/*\n";
+    print "rm $newsamppath/sample*\n";
+    print "rm -r $newsamppath/$oldsample\n";
+}
+=pod
 $projectpath = <$finalpath/*project*>;
 foreach $sample ( sort { $b cmp $a } keys(%sampleC)) {
     $dir = $finalpath . "/" . $sample;
-    if($dir !~ /project/ && -d $dir) {
-	push @sampledirs, $dir;
+    if($o{'in_silico'}){
+	if(($dir !~ /project/ && -d $dir) && $dir =~ /$newsample/) {
+	    push @sampledirs, $dir;
+	}
+    }
+    else{
+	if($dir !~ /project/ && -d $dir) {
+	    push @sampledirs, $dir;
+	}
     }
 }
 
 system("mut2vcf_v3.pl $projectpath");
-
-$genome = "/usr/local/share/bcbio/genomes/Hsapiens/hg19/seq/hg19.fa";
 
 #get calldate
 $summary_file = $projectpath . "/project-summary.yaml";
@@ -170,7 +222,7 @@ chomp(@PROGS = <FH>);
 close(FH) or die $!;
 
 #get calling.yaml
-$bcbio_config = $miseqroot . "/calling/config/calling.yaml";
+$bcbio_config = $miseqroot . $c{'bcbio_config'};
 open(FH, "<$bcbio_config") or die $!;
 chomp(@cf = <FH>);
 close(FH) or die $!;
@@ -189,7 +241,7 @@ for ($i = 0;  $i <= $#cf; $i++){
 
 #get diseasegenesdef info
 foreach $sample ( sort { $b cmp $a } keys(%sampleC)) {
-    $diseasegenesdef = $designAndGeneListsRootPath . "/" . $sampleC{$sample}{genelist};
+    $diseasegenesdef = $c{'designAndGeneListsRootPath'} . "/" . $sampleC{$sample}{genelist};
     $diseasegenesdef_file = $sampleC{$sample}{genelist};
     open(FH0, "<$diseasegenesdef");
     chomp(@GeneL = <FH0>);
@@ -208,7 +260,7 @@ foreach $sample ( sort { $b cmp $a } keys(%sampleC)) {
 }
 
 foreach $sample (sort { $a cmp $b } keys(%sampleC)) {
-    $ccnf = $designAndGeneListsRootPath . "/" .  $sampleC{$sample}{regions};
+    $ccnf = $c{'designAndGeneListsRootPath'} . "/" .  $sampleC{$sample}{regions};
     open(FH0, "<$ccnf");
     chomp(@REG = <FH0>);
     close(FH0);
@@ -237,9 +289,9 @@ foreach $sample (sort { $a cmp $b } keys(%sampleC)) {
     }
 }
 
-$coreRoiRootPath = $designAndGeneListsRootPath . "/core_rois";
+#$c{'coreRoiRootPath = $c{'designAndGeneListsRootPath'} . "/core_rois";
 
-@cores = <$coreRoiRootPath/*.bed>;
+@cores = <$c{'coreRoiRootPath'}/*.bed>;
 foreach $corebed (@cores) {
 #    print "$corebed\n";
     @tmp1 = split(/\//, $corebed);
@@ -247,6 +299,9 @@ foreach $corebed (@cores) {
 #    print "$tmp2[0] $corebed\n";
     $coreH{$tmp2[0]} = $corebed;
 }
+
+system("addLocAfDb.pl $miseqroot");
+
 
 $command0 = "comm." . $miseqroot . ".0.txt";
 $command1 = "comm." . $miseqroot . ".1.txt";
@@ -273,7 +328,7 @@ foreach $sampledir (@sampledirs) {
     @tmp = split(/\//, $sampledir);
     $bam = $sampledir . "/" . $tmp[-1] . "-ready.bam";
 
-    $reg =  $designAndGeneListsRootPath . $sampleC{$sample}{regions};
+    $reg =  $c{'designAndGeneListsRootPath'} . $sampleC{$sample}{regions};
 
     print "$reg\n";
 
@@ -299,7 +354,7 @@ foreach $sampledir (@sampledirs) {
     $bam = $sampledir . "/" . $sample . "-ready.bam";
 
     
-    print "bedtools genomecov -ibam $bam -bga -g $genome -dz \n";
+    print "bedtools genomecov -ibam $bam -bga -g $c{'genome'} -dz \n";
     print "bedtools intersect -wb -a stdin -b $reg\n";
     print "cut -f 1-4,8 | sed \'s/.*/&\n";
     print "$sample\n";
@@ -308,7 +363,7 @@ foreach $sampledir (@sampledirs) {
     print "$sampleC{$sample}{sex}\n";
     print "$outfile\n";
     print FH0 "bedtools coverage -d -abam $bam -b $reg > $outfile2\n";
-    print FH1 "bedtools genomecov -ibam $bam -bga -g $genome | bedtools intersect -wb -a stdin -b $reg | cut -f 1-4,8 | sed \'s/.*/&\t$sample\t$rundate\t$calldate\t$sampleC{$sample}{sex}/\' >$outfile\n";
+    print FH1 "bedtools genomecov -ibam $bam -bga -g $c{'genome'} | bedtools intersect -wb -a stdin -b $reg | cut -f 1-4,8 | sed \'s/.*/&\t$sample\t$rundate\t$calldate\t$sampleC{$sample}{sex}/\' >$outfile\n";
     print FH2 "filter_coverage.pl $outfile | sort -k1,1 -k2,2n | bedtools merge -i stdin -c 5,6,7,8 -o distinct,distinct,distinct,distinct > $outfile_le30merge\n";
     print FH3 "samtools index $bam\n";
     if(exists($coreH{$sampleC{$sample}{disease}})){
@@ -348,7 +403,7 @@ $ann1vcf = $projectpath . "/batch1-ensemble.d.1kg.esp.exac.vcf";
 $ann2vcf = $projectpath . "/batch1-ensemble.d.1kg.esp.exac.ala.vcf";
 $ann3vcf = $projectpath . "/batch1-ensemble.d.1kg.esp.exac.ala.frq.vcf";
 $ann4vcf = $projectpath . "/batch1-ensemble.d.1kg.esp.exac.ala.frq.ann.vcf";
-
+$ann4avcf = $projectpath . "/batch1-ensemble.d.1kg.esp.exac.ala.frq.ann." . $newsample . ".vcf";
 
 system("pigz -f -d -k $ensvcfgz");
 system("vt decompose $ensvcf -o $ensdecompvcf");
@@ -356,7 +411,48 @@ system("snpsift_annotate_esp_1kg_exac.pl $ensdecompvcf");
 system("snpsift_annotate_alamut.pl $ann1vcf");
 system("getfreq.pl $ann2vcf > $ann3vcf");
 
-system("java -Xmx4g -jar /home/data_in/bin/snpEff.jar hg19 -c /home/data_in/databases/snpeff/snpEff.config $ann3vcf > $ann4vcf");
+system("java -Xmx4g -jar $c{'snpeff_path'} hg19 -c /home/data_in/databases/snpeff/snpEff.config $ann3vcf > $ann4vcf");
+
+if($o{'in_silico'}){
+    open(FH, "<$ann4vcf") or die $!;
+    open(FH2, ">$ann4avcf") or die $!;
+    while ($line = <FH>) {
+	if($line =~ /^\S/) {
+	    chomp($line);
+	    if($line =~ /^#CHROM/){
+		@tmp = split(/\t/, $line);
+		for ($i = 0; $i <= $#tmp; $i++){
+		    if($i >= 9){
+			if ($tmp[$i] =~ /^(\d\d)-(\d\d\d)$/){
+			    $tmp[$i] = $1 . "-0" . $2;
+			}
+		    }
+		    
+		    if($tmp[$i] eq $oldsample){
+			$s2c{$newsample} = $i;
+		    }
+		}
+		$line .= "\t" . $newsample;
+		print FH2 "$line\n";
+	    }
+	    elsif($line =~ /^#/){
+		print FH2 "$line\n";
+	    }
+	    else{
+		@tmp = split(/\t/, $line);
+		push @tmp, $tmp[$s2c{$newsample}];
+		$line = join("\t", @tmp);
+		print FH2 "$line\n";
+	    }
+	}
+    }
+    close(FH);
+    close(FH2);
+    $ann4vcf = $ann4avcf;
+}
+
+
+
 
 open(FH, "<$ann4vcf") or die $!;
 chomp(@gout = <FH>);
@@ -784,7 +880,7 @@ foreach $sampledir (@sampledirs) {
 	    $format = $zero;
 	}
 	$mlink = "http://localhost:10000/show?request=" . $outrow[1] . ":" . $outrow[2] . "-" . $outrow[2];
-	$blink = "http://localhost:10000/show?request=BAM<G:\\genetik\\GML\\NGS\\NGS_calls\\" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
+	$blink = "http://localhost:10000/show?request=BAM<$c{'winshare_root'}" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
 	$ws->write_row($i,0, \@outrow, $format);
 	$ws->write_url($i, $#outrow+1, $mlink, $format, 'mut_link');
 	$ws->write_url($i, $#outrow+2, $blink, $format, 'bam_link');
@@ -819,7 +915,7 @@ foreach $sampledir (@sampledirs) {
 	    $format = $zero;
 	}
 	$mlink = "http://localhost:10000/show?request=" . $outrow[1] . ":" . $outrow[2] . "-" . $outrow[2];
-	$blink = "http://localhost:10000/show?request=BAM<G:\\genetik\\GML\\NGS\\NGS_calls\\" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
+	$blink = "http://localhost:10000/show?request=BAM<$c{'winshare_root'}" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
 	$ws->write_row($i,0, \@outrow, $format);
 	$ws->write_url($i, $#outrow+1, $mlink, $format, 'mut_link');
 	$ws->write_url($i, $#outrow+2, $blink, $format, 'bam_link');
@@ -854,7 +950,7 @@ foreach $sampledir (@sampledirs) {
 	    $format = $zero;
 	}
 	$mlink = "http://localhost:10000/show?request=" . $outrow[1] . ":" . $outrow[2] . "-" . $outrow[2];
-	$blink = "http://localhost:10000/show?request=BAM<G:\\genetik\\GML\\NGS\\NGS_calls\\" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
+	$blink = "http://localhost:10000/show?request=BAM<$c{'winshare_root'}" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
 	$ws->write_row($i,0, \@outrow, $format);
 	$ws->write_url($i, $#outrow+1, $mlink, $format, 'mut_link');
 	$ws->write_url($i, $#outrow+2, $blink, $format, 'bam_link');
@@ -889,7 +985,7 @@ foreach $sampledir (@sampledirs) {
 	    $format = $zero;
 	}
 	$mlink = "http://localhost:10000/show?request=" . $outrow[1] . ":" . $outrow[2] . "-" . $outrow[2];
-	$blink = "http://localhost:10000/show?request=BAM<G:\\genetik\\GML\\NGS\\NGS_calls\\" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
+	$blink = "http://localhost:10000/show?request=BAM<$c{'winshare_root'}" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
 	$ws->write_row($i,0, \@outrow, $format);
 	$ws->write_url($i, $#outrow+1, $mlink, $format, 'mut_link');
 	$ws->write_url($i, $#outrow+2, $blink, $format, 'bam_link');
@@ -924,7 +1020,7 @@ foreach $sampledir (@sampledirs) {
 	    $format = $zero;
 	}
 	$mlink = "http://localhost:10000/show?request=" . $outrow[1] . ":" . $outrow[2] . "-" . $outrow[2];
-	$blink = "http://localhost:10000/show?request=BAM<G:\\genetik\\GML\\NGS\\NGS_calls\\" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
+	$blink = "http://localhost:10000/show?request=BAM<$c{'winshare_root'}" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
 	$ws->write_row($i,0, \@outrow, $format);
 	$ws->write_url($i, $#outrow+1, $mlink, $format, 'mut_link');
 	$ws->write_url($i, $#outrow+2, $blink, $format, 'bam_link');
@@ -959,7 +1055,7 @@ foreach $sampledir (@sampledirs) {
 	    $format = $zero;
 	}
 	$mlink = "http://localhost:10000/show?request=" . $outrow[1] . ":" . $outrow[2] . "-" . $outrow[2];
-	$blink = "http://localhost:10000/show?request=BAM<G:\\genetik\\GML\\NGS\\NGS_calls\\" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
+	$blink = "http://localhost:10000/show?request=BAM<$c{'winshare_root'}" . $sample . "\\" . $rundate . ".$nowtime" . "\\" . $bam_file;
 	$ws->write_row($i,0, \@outrow, $format);
 	$ws->write_url($i, $#outrow+1, $mlink, $format, 'mut_link');
 	$ws->write_url($i, $#outrow+2, $blink, $format, 'bam_link');
@@ -1039,7 +1135,7 @@ foreach $sampledir (@sampledirs) {
 	    $end = $tmp[2];
 	    
 	    $mlink = "http://localhost:10000/show?request=" . $tmp[0] . ":" . $start . "-" . $end;
-	    $blink = "http://localhost:10000/show?request=BAM<G:\\genetik\\GML\\NGS\\NGS_calls\\" . $winpath . "\\". $bam_file;	
+	    $blink = "http://localhost:10000/show?request=BAM<$c{'winshare_root'}" . $winpath . "\\". $bam_file;	
 	    
 	    $ws3->write_url($i+1, 5, $mlink, $format, 'reg_link');
 	    $ws3->write_url($i+1, 6, $blink, $format, 'bam_link');
@@ -1085,7 +1181,7 @@ foreach $sampledir (@sampledirs) {
 	    $end = $tmp[2];
 	    
 	    $mlink = "http://localhost:10000/show?request=" . $tmp[0] . ":" . $start . "-" . $end;
-	    $blink = "http://localhost:10000/show?request=BAM<G:\\genetik\\GML\\NGS\\NGS_calls\\" . $winpath . "\\". $bam_file;	
+	    $blink = "http://localhost:10000/show?request=BAM<$c{'winshare_root'}" . $winpath . "\\". $bam_file;	
 	    
 	    $ws3b->write_url($i+1, 5, $mlink, $format, 'reg_link');
 	    $ws3b->write_url($i+1, 6, $blink, $format, 'bam_link');
@@ -1188,19 +1284,19 @@ foreach $sampledir (@sampledirs) {
     
     $ws5 = $wb->add_worksheet('quality');
     $ws5->write(1,0, 'TEQC:');
-    $teqclink = "G:\\genetik\\GML\\NGS\\NGS_calls\\" . $winpath . "\\" . "qc\\teqc\\index.html";
+    $teqclink = $c{'winshare_root'} . $winpath . "\\" . "qc\\teqc\\index.html";
     $ws5->write_url(1, 1, $teqclink, $format, 'teqc_link');
     
     $ws5->write(2,0, 'FASTQC:');
-    $fqclink = "G:\\genetik\\GML\\NGS\\NGS_calls\\" . $winpath . "\\" . "qc\\fastqc\\fastqc_report.html";
+    $fqclink = $c{'winshare_root'} . $winpath . "\\" . "qc\\fastqc\\fastqc_report.html";
     $ws5->write_url(2, 1, $fqclink, $format, 'fastqc_link');
     
     $ws5->write(3,0, 'Commands log:');
-    $fqclink = "G:\\genetik\\GML\\NGS\\NGS_calls\\" . $winpath . "\\" . "qc\\bcbio-nextgen-commands.log";
+    $fqclink = $c{'winshare_root'} . $winpath . "\\" . "qc\\bcbio-nextgen-commands.log";
     $ws5->write_url(3, 1, $fqclink, $format, 'commands_link');
     $diseasegenesdef_link = $diseasegenesdef_file . "_link";
     $ws5->write(4,0, 'Indications/genes:');
-    $fqclink = "G:\\genetik\\GML\\NGS\\NGS_calls\\" . $winpath . "\\" . "qc\\" . $diseasegenesdef_link;
+    $fqclink = $c{'winshare_root'} . $winpath . "\\" . "qc\\" . $diseasegenesdef_link;
     $ws5->write_url(4, 1, $fqclink, $format, $diseasegenesdef_file);
     
     
