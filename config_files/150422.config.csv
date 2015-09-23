@@ -1,8 +1,0 @@
-#diseases: LQTS/SQTS/BrS/CPVT/IVF/HCM/HCM_stellan/DCM_LVNC/ARVC/RCM/FTAAD/FH/Pan_Arytmi/Pan_Kardiomyopati
-#samplename	sex	coverag_interval	disease
-15-1452	male	LKPN_hart_design_II.bed	LQTS%CPVT
-15-1456	male	LKPN_hart_design_II.bed	FTAAD
-15-1714	male	LKPN_hart_design_II.bed	HCM
-15-1865	female	LKPN_hart_design_II.bed	HCM
-15-1904	female	LKPN_hart_design_II.bed	HCM
-15-1907	female	LKPN_hart_design_II.bed	FTAAD

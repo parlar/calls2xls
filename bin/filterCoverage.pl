@@ -1,8 +1,8 @@
 #!/usr/bin/perl -w
 #
 use List::Util qw(max min);
-die "filter_coverage.pl <bed>\n" if (!(@ARGV));
-die "filter_coverage.pl <bed>\n" if ( $#ARGV != 0 );
+die "filterCoverage.pl <bed>\n" if (!(@ARGV));
+die "filterCoverage.pl <bed>\n" if ( $#ARGV != 0 );
 
 chomp($d1 = $ARGV[0]);
 

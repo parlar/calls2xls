@@ -11,10 +11,35 @@ chomp($final = $ARGV[0]);
 $final =~ s/\/$//g;
 $of = $final . "/alamut_mut.vcf";
 
-$path = "/media/windowsshare/GML/Sekvenser/AlamutFiles";
+open (FH, "</home/data_in/calls2xls/calls2xls.cfg");
+while ( $line = <FH> ) {
+    if($line !~ /#/ && $line =~ /\S/){
+	@tmp = split(/=/, $line);
+	foreach $row (@tmp) {
+	    $row =~ s/\s//g;
+	}
+	$c{$tmp[0]}=$tmp[1];
+	if($tmp[0] eq "info_dp"){
+	    @info = split(/,/,$tmp[1]);
+	    foreach $i (@info){
+		$c{$tmp[0]}{$i} = 1;
+	    }
+	}
+	if($tmp[0] eq "info_ao"){
+	    @info = split(/,/,$tmp[1]);
+	    foreach $i (@info){
+		$c{$tmp[0]}{$i} = 1;
+	    }
+	}
+    }
+}
+
+
+
+$path = $c{'alamutpath'};
 chomp(@files = <$path/*.mut>);
 
-$hg19 = "/usr/local/share/bcbio/genomes/Hsapiens/hg19/seq/hg19.fa";
+$hg19 = $c{'genome'};
 
 $tm = localtime;
 $date = sprintf("%04d-%02d-%02d", $tm->year+1900, ($tm->mon)+1, $tm->mday);
@@ -176,11 +201,12 @@ foreach $ass (sort { $a cmp $b } keys(%alldat)) {
     $bedfile = "tmp." . $ass . ".bed";
     open(FH, ">/tmp/$bedfile");
     if($ass eq "NCBI36") {
-	$chain = "/home/parlar/Downloads/chainfiles/hg18ToHg19.over.chain.gz";
+	$chain = "/home/data_in/calls2xls/chainfiles/hg18ToHg19.over.chain.gz";
     }
     elsif($ass eq "GRCh38"){
-	$chain = "/home/parlar/Downloads/chainfiles/hg38ToHg19.over.chain.gz";
+	$chain = "/home/data_in/calls2xls/chainfiles/hg38ToHg19.over.chain.gz";
     }
+#    print "$ass $chain\n";
     if($ass eq "GRCh38" || $ass eq "NCBI36"){
 	foreach $id (sort { $a cmp $b } keys(%{$alldat{$ass}})) {
 	    if($alldat{$ass}{$id}{posi} =~ /(\d+)_(\d+)/){

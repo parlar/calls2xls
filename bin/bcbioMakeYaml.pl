@@ -6,18 +6,26 @@
 
 use Cwd;
 
-die "usage: bcbio_make_yaml_germline_v3.pl <fastq folder>\n" if (!exists($ARGV[0]));
-die "usage: bcbio_make_yaml_germline_v3.pl <fastq folder>\n" if ( $#ARGV < 0 );
+die "usage: bcbioMakeYaml.pl <runfolder>\n" if (!exists($ARGV[0]));
+die "usage: bcbioMakeYaml.pl <runfolder>\n" if ( $#ARGV != 0 );
 
 chomp($folder = $ARGV[0]);
 $folder =~ s/\/$//g;
-$root = "/home/data_in/calling/haloplex";
-$design_genelistsRoot = $root . "/design_genelists";
 
-@fpath = split(/\//, $folder);
-@folder_explode = split(/_/, $fpath[-1]);
+## Read configs
+open (FH, "</home/data_in/calls2xls/calls2xls.cfg");
+while ( $line = <FH> ) {
+    if($line !~ /#/ && $line =~ /\S/){
+        @tmp = split(/=/, $line);
+        foreach $row (@tmp) {
+            $row =~ s/\s//g;
+        }
+        $c{$tmp[0]}=$tmp[1];
+    }
+}
+close(FH);
 
-#$rundate = $folder_explode[0];
+#@fpath = split(/\//, $folder);
 
 $sample_file = $folder . "/SampleSheet.csv";
 
@@ -42,10 +50,10 @@ for ($i = 0; $i <= $#SAMPLESHEET; $i++) {
 	    @tmp = split(/,/, $SAMPLESHEET[$i]);
 	    @tmp2 = split(/\$/, $tmp[7]);
 	    
-	    $sdat{$tmp[0]}{'regions_design'} = $design_genelistsRoot . "/" . $tmp2[0];
+	    $sdat{$tmp[0]}{'regions_design'} = $c{'designAndGeneListsRootPath'} . "/" . $tmp2[0];
 	    $sdat{$tmp[0]}{'sex'} = $tmp2[1];
 	    $sdat{$tmp[0]}{'indication'} = $tmp2[2];
-	    $sdat{$tmp[0]}{'genedisease'} = $design_genelistsRoot . "/" . $tmp2[3];
+	    $sdat{$tmp[0]}{'genedisease'} = $c{'designFilesPath'} . "/" . $tmp2[3];
 	    
 	    print "$tmp[0]\t$sdat{$tmp[0]}{'sex'}\t$sdat{$tmp[0]}{'regions_design'}\t$sdat{$tmp[0]}{'indication'}\n";
 	}
@@ -143,6 +151,6 @@ foreach $sample (sort { $a cmp $b } keys(%sdat) ) {
 
 close(FH);
 
-chdir "$workdir";
-system("bcbio_nextgen.py -t local -n 30 ../config/calling.yaml");
-chdir "../../";
+#chdir "$workdir";
+#system("bcbio_nextgen.py -t local -n 30 ../config/calling.yaml");
+#chdir "../../";
