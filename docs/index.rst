@@ -13,6 +13,7 @@ Contents:
 
    intro
    installation
+   running
 
 Indices and tables
 ==================
