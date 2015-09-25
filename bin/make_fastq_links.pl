@@ -1,11 +1,25 @@
 #!/usr/bin/perl -w
 #
-#use Statistics::Basic qw(:all);
-#use Text::CSV;
+
 use Cwd;
 
 die "make_fastq_links.pl <folder> \n" if (!(@ARGV));
 die "make_fastq_links.pl <folder> \n" if ( $#ARGV != 0 );
+
+open (FH, "</home/data_in/calls2xls/calls2xls.cfg");
+
+while ( $line = <FH> ) {
+    if($line !~ /#/ && $line =~ /\S/){
+        @tmp = split(/=/, $line);
+        foreach $row (@tmp) {
+            $row =~ s/\s//g;
+        }
+        $c{$tmp[0]}=$tmp[1];
+    }
+}
+close(FH);
+
+
 
 chomp($root = $ARGV[0]);
 
@@ -55,7 +69,7 @@ foreach $sample (sort { $a cmp $b } keys(%sampleFiles)) {
 		$f2 = $file;
 	    }
 	}
-	print FH1 "trim_galore --length 44 --paired --clip_R2 5 --clip_R1 5 -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC -a2 AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT $f1 $f2\n";
+	print FH1 "$c{'trim_galore'} --length 44 --paired --clip_R2 5 --clip_R1 5 -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC -a2 AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT $f1 $f2\n";
     }
 }
 
