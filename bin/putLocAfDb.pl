@@ -4,35 +4,16 @@
 
 use YAML::XS 'LoadFile';
 use Sort::Key::Natural qw(natsort);
-
+use Config::General;
 
 die "putLocAfDb.pl <miseq folder> \n" if (!(@ARGV));
 die "putLocAfDb.pl <miseq folder \n" if ( $#ARGV != 0 );
 
 chomp($miseqroot = $ARGV[0]);
 
-open (FH, "</home/data_in/calls2xls/calls2xls.cfg");
-while ( $line = <FH> ) {
-    if($line !~ /#/ && $line =~ /\S/){
-	@tmp = split(/=/, $line);
-	foreach $row (@tmp) {
-	    $row =~ s/\s//g;
-	}
-	$c{$tmp[0]}=$tmp[1];
-	if($tmp[0] eq "info_dp"){
-	    @info = split(/,/,$tmp[1]);
-	    foreach $i (@info){
-		$c{$tmp[0]}{$i} = 1;
-	    }
-	}
-	if($tmp[0] eq "info_ao"){
-	    @info = split(/,/,$tmp[1]);
-	    foreach $i (@info){
-		$c{$tmp[0]}{$i} = 1;
-	    }
-	}
-    }
-}
+## Read configs
+$conf = Config::General->new("$ENV{'CALLS2XLS'}/calls2xls.cfg");
+%c = $conf->getall;
 
 $rundate = (split /_/, $miseqroot)[0];
 
@@ -50,12 +31,12 @@ $dt = $config -> {date};
 $dt =~ /\d\d(\d\d)-(\d\d)-(\d\d)\s/;
 $calldate = $1 . $2 . $3;
 
-$ensvcfgz = $projectpath . "/batch1-ensemble.vcf.gz";
-$outvar = $c{'tmpdir'} . "/tmp.vcf";
-$outnorm = $outvar . ".n.vcf";
-$vardb_nogz = $c{'tmpdir'} . "/tmp_vardb.vcf";
-$outdbbed = $c{'tmpdir'} . "/tmp_projectSampleDbCovs.s.bed.gz";
-$projectsamplecovs = $c{'tmpdir'} . "/tmp_projectSampleDbCovs.bed";
+$ensvcfgz           = $projectpath . "/batch1-ensemble.vcf.gz";
+$outvar             = $c{'tmpdir'} . "/tmp.vcf";
+$outnorm            = $outvar . ".n.vcf";
+$vardb_nogz         = $c{'tmpdir'} . "/tmp_vardb.vcf";
+$outdbbed           = $c{'tmpdir'} . "/tmp_projectSampleDbCovs.s.bed.gz";
+$projectsamplecovs  = $c{'tmpdir'} . "/tmp_projectSampleDbCovs.bed";
 
 open FH, "gunzip -c $ensvcfgz | ";
 open(FH2, ">$outvar");

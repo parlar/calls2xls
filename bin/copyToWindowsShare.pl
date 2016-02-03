@@ -12,14 +12,17 @@ $rootfolder = $folder . "/calling/final";
 
 foreach $samplef (@samplefolders) {
     if($samplef !~ /project/) {
-	@spl = split(/\//, $samplef);
-	push @spl, $spl[-1];
-	
-	$from = join('/', @spl);
-	$from =~ s/\/\//\//g;
-	print "$from\n";
-	system("rsync -r --ignore-existing $from $winshare");
+        @samplefolderyears = <$samplef/*>;
+        foreach $sfy (@samplefolderyears){
+            if (-d $sfy) {
+                @tmp = split(/\//, $sfy);
+                if($tmp[-1] =~ /^\d\d\d\d$/){
+                    print "$sfy\n";
+                	system("rsync -r --ignore-existing $sfy $winshare");
+                }
+            }
+        }
     }
 }
 
-system("winshare_date_no.pl 1");
+#system("winshare_date_no.pl 1");

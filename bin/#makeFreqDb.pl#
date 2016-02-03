@@ -1,0 +1,102 @@
+#!/usr/bin/perl -w
+#
+
+use Config::General;
+
+die "makeFreqDb.pl <in.vardb> <in.covdb> <out.freqdb>\n" if (!(@ARGV));
+die "makeFreqDb.pl <in.vardb> <in.covdb> <out.freqdb>\n" if ( $#ARGV != 2 );
+
+chomp($vardb = $ARGV[0]);
+chomp($covdb = $ARGV[1]);
+chomp($freqdb = $ARGV[2]);
+
+$conf = Config::General->new("$ENV{'CALLS2XLS'}/calls2xls.cfg");
+%c = $conf->getall;
+
+open FH, "gunzip -c $vardb | ";
+while ($line = <FH>) {
+    if($line =~ /^#/){
+		push @header, $line;
+    }
+    else{
+#		print "$line";
+		@vcfrow = split(/\s/, $line);
+		@covout = ();
+		$all_sample_tot_alleles = 0;
+		%covSamples = ();
+		
+		$position = $vcfrow[0] . ":" . $vcfrow[1] . "-" . $vcfrow[1];
+		
+		unless (open(GFH, "tabix $covdb $position 2>&1 |")) {
+			die "Can't spawn external command!";
+		}
+		chomp(@covout = <GFH>);
+		close(GFH);
+
+		foreach $row(@covout){
+			@cov = split(/\t/, $row);
+			$id = $cov[5] . ":" . $cov[6] . ":" . $cov[7];
+			if($cov[3] >= $c{'min_cov'}) {
+				if($cov[0] eq "chrM"){
+					$all_sample_tot_alleles += 1;
+					$covSamples{$id}{'tot_alleles'} = 1;
+				}
+				elsif($cov[0] eq "chrY" && $cov[8] eq "male"){
+					$all_sample_tot_alleles += 1;
+					$covSamples{$id}{'tot_alleles'} = 1;
+				}
+				elsif($cov[0] eq "chrX" && $cov[8] eq "female"){
+					$all_sample_tot_alleles += 2;
+					$covSamples{$id}{'tot_alleles'} = 2;
+				}
+				elsif($cov[0] eq "chrX" && $cov[8] eq "male"){
+					$all_sample_tot_alleles += 1;
+					$covSamples{$id}{'tot_alleles'} = 1;
+				}
+				else{
+					$all_sample_tot_alleles += 2;
+					$covSamples{$id}{'tot_alleles'} = 2;
+				}
+			}
+		}
+
+		@entries = split(/;/, $vcfrow[7]);
+		$all_sample_found_alleles = 0;
+		foreach $row (@entries){
+			if($row =~ /=/){
+				($id, $value) = split(/=/, $row);
+				if(exists($covSamples{$id})){
+#					print "$id $value\n";
+					$value =~ /(\d+)\/(\d+)/;
+					$all_sample_found_alleles += $covSamples{$id}{'tot_alleles'} * $1 / $2;
+				}
+			}
+		}
+		eval{
+			$freq = sprintf("%.2f",  $all_sample_found_alleles/$all_sample_tot_alleles*100);
+			print "$all_sample_found_alleles $all_sample_tot_alleles $freq%\n";
+		} or do {
+			print "$all_sample_found_alleles $all_sample_tot_alleles\n";
+			print "$line \n";
+			foreach $row(@covout){
+				print "$row\n";
+			}
+			die;
+		}
+	}
+}
+close(FH);
+=pod
+
+
+open FH, ">$head";
+print FH "$header[0]";
+foreach $key ( sort { $b cmp $a } keys(%keys)) {
+    print FH "##INFO=<ID=" . $key . ",Number=A,Type=String,Description=\"sample:rundate:calldate=foundAlleles/totalAlleles.\">\n";
+}
+print FH "$header[-1]";
+
+close(FH);
+
+system("bcftools reheader -h $head -o $outfile $infile");
+system("tabix -p vcf $outfile")

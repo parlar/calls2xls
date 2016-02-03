@@ -3,37 +3,18 @@
 
 use Time::localtime;
 use List::Util qw(max min);
+use Config::General;
 
 die "mut2vcf.pl <final_path> \n" if (!(@ARGV));
 die "mut2vcf.pl <final_path> \n" if ( $#ARGV != 0 );
 
 chomp($final = $ARGV[0]);
 $final =~ s/\/$//g;
-$of = $final . "/alamut_mut.vcf";
+$of = $final . "/alamut_mut.vcf.gz";
 
-open (FH, "</home/data_in/calls2xls/calls2xls.cfg");
-while ( $line = <FH> ) {
-    if($line !~ /#/ && $line =~ /\S/){
-	@tmp = split(/=/, $line);
-	foreach $row (@tmp) {
-	    $row =~ s/\s//g;
-	}
-	$c{$tmp[0]}=$tmp[1];
-	if($tmp[0] eq "info_dp"){
-	    @info = split(/,/,$tmp[1]);
-	    foreach $i (@info){
-		$c{$tmp[0]}{$i} = 1;
-	    }
-	}
-	if($tmp[0] eq "info_ao"){
-	    @info = split(/,/,$tmp[1]);
-	    foreach $i (@info){
-		$c{$tmp[0]}{$i} = 1;
-	    }
-	}
-    }
-}
-
+## Read configs
+$conf = Config::General->new("$ENV{'CALLS2XLS'}/calls2xls.cfg");
+%c = $conf->getall;
 
 
 $path = $c{'alamutpath'};
@@ -63,8 +44,8 @@ foreach $mutfile (@files) {
     $type = ".";
     $posi_g = ".";
     $chr = ".";
-    $class_val = ".";
-    $class_index = ".";
+    $class_ctype = ".";
+    $class_clevel = ".";
     $created = ".";
     $updated = ".";
     %crh = ();
@@ -86,8 +67,8 @@ foreach $mutfile (@files) {
 	    $baseFrom_g = " ";
 	    $baseTo_g = " ";
 	    $inserted_g = " ";
-	    $class_val = " ";
-	    $class_index = " ";
+	    $class_ctype = " ";
+	    $class_clevel = " ";
 
 	}
 
@@ -118,9 +99,10 @@ foreach $mutfile (@files) {
 	    }
 	    if($line =~ /<Classification\s+/){
 		$line =~ /val="(.*?)"/;
-		$class_val = $1;
+		$class_ctype = $1;
 		$line =~ /index="(.*?)"/;
-		$class_index = $1;		
+		$class_clevel = $1;
+#		print "$class_ctype	$class_clevel\n";	
 	    }
 	    if($line =~ /<Created\s+/){
 		$line =~ /date="(.*?)"/;
@@ -173,13 +155,13 @@ foreach $mutfile (@files) {
 	    elsif($type eq "ins" || $type eq "delins") {
 		$alldat{$assembly}{$id}{insert} = $inserted_g;
 	    }
-	    if($class_val =~ /\S/) {
-		$alldat{$assembly}{$id}{clval} = $class_val;
-		$alldat{$assembly}{$id}{clind} = $class_index;
+	    if($class_ctype =~ /\S/) {
+		$alldat{$assembly}{$id}{ctype} = $class_ctype;
+		$alldat{$assembly}{$id}{clevel} = $class_clevel;
 	    }
 	    %crh = ();
 	    %uph = ();
-
+#	    print "$class_clevel $class_ctype\n";
 	    $gene = ".";
 	    $assembly = ".";
 	    $baseFrom_g = ".";
@@ -188,10 +170,11 @@ foreach $mutfile (@files) {
 	    $type = ".";
 	    $posi_g = ".";
 	    $chr = ".";
-	    $class_val = ".";
-	    $class_index = ".";
+	    $class_ctype = ".";
+	    $class_clevel = ".";
 	    $created = ".";
 	    $updated = ".";
+
 
 	}
     }
@@ -201,262 +184,261 @@ foreach $ass (sort { $a cmp $b } keys(%alldat)) {
     $bedfile = "tmp." . $ass . ".bed";
     open(FH, ">/tmp/$bedfile");
     if($ass eq "NCBI36") {
-	$chain = "/home/data_in/calls2xls/chainfiles/hg18ToHg19.over.chain.gz";
+        $chain = $c{'hg18ToHg19'};
     }
     elsif($ass eq "GRCh38"){
-	$chain = "/home/data_in/calls2xls/chainfiles/hg38ToHg19.over.chain.gz";
+        $chain = $c{'hg38ToHg19'};
     }
 #    print "$ass $chain\n";
     if($ass eq "GRCh38" || $ass eq "NCBI36"){
-	foreach $id (sort { $a cmp $b } keys(%{$alldat{$ass}})) {
-	    if($alldat{$ass}{$id}{posi} =~ /(\d+)_(\d+)/){
-		$p1 = $1;
-		$p2 = $2;
-		print FH "chr$alldat{$ass}{$id}{chr}\t$p1\t$p2\t$id\t10\t+\n";
-		
-	    }
-	    elsif($alldat{$ass}{$id}{posi} =~ /(\d+)/){
-		$p1 = $1;
-#		print "chr$alldat{$ass}{$id}{chr}\t$p1\t$p1\t$id\t10\t+\n";
-		print FH "chr$alldat{$ass}{$id}{chr}\t$p1\t$p1\t$id\t10\t+\n";
-	    }
-	}
-	close(FH);
-	if($ass eq "NCBI36" || $ass eq "GRCh38"){
-	    open(FH2, "CrossMap.py bed $chain /tmp/$bedfile  2>&1 |");
-	    chomp(@CM = <FH2>);
-	    unless (close(FH2)) {  
-		die "External command failed: $?";
-	    }
-	    foreach $row (@CM) {
-#		print "$row\n";
-		unless($row =~ /^@/){
-#		    print "$row\n";
-		    @tmp = split(/\t/, $row);
-		    $conv{$tmp[3]} = $row;
-		}
-	    }
-	}
+        foreach $id (sort { $a cmp $b } keys(%{$alldat{$ass}})) {
+            if($alldat{$ass}{$id}{posi} =~ /(\d+)_(\d+)/){
+                $p1 = $1;
+                $p2 = $2;
+                print FH "chr$alldat{$ass}{$id}{chr}\t$p1\t$p2\t$id\t10\t+\n";
+            }
+            elsif($alldat{$ass}{$id}{posi} =~ /(\d+)/){
+                $p1 = $1;
+    #   		print "chr$alldat{$ass}{$id}{chr}\t$p1\t$p1\t$id\t10\t+\n";
+                print FH "chr$alldat{$ass}{$id}{chr}\t$p1\t$p1\t$id\t10\t+\n";
+            }
+        }
+        close(FH);
+        if($ass eq "NCBI36" || $ass eq "GRCh38"){
+            open(FH2, "CrossMap.py bed $chain /tmp/$bedfile  2>&1 |");
+            print "CrossMap.py bed $chain /tmp/$bedfile\n";
+            chomp(@CM = <FH2>);
+            unless (close(FH2)) {  
+                die "External command failed: $?";
+            }
+            foreach $row (@CM) {
+    #		print "$row\n";
+                unless($row =~ /^@/){
+        #		    print "$row\n";
+                    @tmp = split(/\t/, $row);
+                    $conv{$tmp[3]} = $row;
+                }
+    	    }
+    	}
     }
 }
 
 foreach $ass (sort { $a cmp $b } keys(%alldat)) {
     foreach $id (sort { $a cmp $b } keys(%{$alldat{$ass}})) {
 	
-	$id2 = $id;
-	$id2 =~ s/\{//g;
-	$id2 =~ s/\}//g;
-	$mutid = "ALMUTID=" . $id2;
-#	print "$ass $id\n";
-	$alc = $mutid;
-	if(exists($alldat{$ass}{$id}{clind})){
-	    $alc_index = ";ALCINDEX=" . $alldat{$ass}{$id}{clind};
-	    $alc_val = ";ALCVAL=" . $alldat{$ass}{$id}{clval};
-	    $alc .= ";ALAMUT=1" .  $alc_index . $alc_val;
-	}
-	if(exists($alldat{$ass}{$id}{created})){
-	    $alc .= ";ALCREATE=" .  $alldat{$ass}{$id}{created};
-	}
-	if(exists($alldat{$ass}{$id}{created})){
-	    $alc .= ";ALUPDATE=" .  $alldat{$ass}{$id}{updated};
-	}
-	if(($ass eq "NCBI36" || $ass eq "GRCh38") || $ass eq "GRCh37"){
-	    $chr = $alldat{$ass}{$id}{'chr'};
-	    $chr_ch = $chr;
-	    if(exists($conv{$id})){
-		@tmp = split(/\t/, $conv{$id});
-		$first = $tmp[8];
-		$second = $tmp[9];
-#		$dir = $tmp[12]
-	    }
-	    if($chr eq "MT"){
-		$chr = "M";
-	    }
-	    if($chr eq "X"){
-		$chr_ch = 30;
-	    }
-	    if($chr eq "Y"){
-		$chr_ch = 31;
-	    }
-	    if($chr eq "MT"){
-		$chr_ch = 32;
-	    }
-	    if($chr eq "M"){
-		$chr_ch = 33;
-	    }
-	    if($alldat{$ass}{$id}{type} eq "dup"){
-#		print "dup\n";
-		if($alldat{$ass}{$id}{posi} =~ /(\d+)_(\d+)/){
-		    if(exists($conv{$id})){
-			$reg = "chr$chr:$first-$second";
-			$start = $first;
-		    }
-		    else{
-			$reg = "chr$chr:$1-$2";
-			$start = $1;
-		    }
-		}
-		else{
-		    if(exists($conv{$id})){
-			$reg = "chr$chr:$first-$second";
-			$start = $first;
-		    }
-		    else{
-			$reg = "chr$chr:$alldat{$ass}{$id}{posi}-$alldat{$ass}{$id}{posi}";
-			$start = $alldat{$ass}{$id}{posi};
-		    }
-		}
-		
-		open(FH2, "samtools faidx $hg19 $reg  2>&1 |");
-		chomp(@REG = <FH2>);
-		close(FH2);
-
-		shift(@REG);
-		$ref = join('', @REG);
-		$alt = $ref . $ref;
-#		print "$reg\n$ref\n$alt\n$start\n";
-		if(length($ref) < 30) {
-		    $outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$ref\t$alt\t100\t.\t$alc\tGT\t1/1";
-		}
+        $id2 = $id;
+        $id2 =~ s/\{//g;
+        $id2 =~ s/\}//g;
+        $mutid = "ALMUTID=" . $id2;
+    #	print "$ass $id\n";
+        $alc = $mutid;
+        if(exists($alldat{$ass}{$id}{ctype})){
+            $alc_ctype = ";CTYPE=" . $alldat{$ass}{$id}{ctype};
+            $alc_clevel = ";CLEVEL=" . $alldat{$ass}{$id}{clevel};
+            $alc .= ";ALAMUT=1" .  $alc_ctype . $alc_clevel;
+        }
+        if(exists($alldat{$ass}{$id}{created})){
+            $alc .= ";CREATED=" .  $alldat{$ass}{$id}{created};
+        }
+        if(exists($alldat{$ass}{$id}{created})){
+            $alc .= ";UPDATED=" .  $alldat{$ass}{$id}{updated};
+        }
+        if(($ass eq "NCBI36" || $ass eq "GRCh38") || $ass eq "GRCh37"){
+            $chr = $alldat{$ass}{$id}{'chr'};
+            $chr_ch = $chr;
+            if(exists($conv{$id})){
+                @tmp = split(/\t/, $conv{$id});
+                $first = $tmp[8];
+                $second = $tmp[9];
+    #		$dir = $tmp[12]
+            }
+            if($chr eq "MT"){
+                $chr = "M";
+            }
+            if($chr eq "X"){
+                $chr_ch = 30;
+            }
+            if($chr eq "Y"){
+                $chr_ch = 31;
+            }
+            if($chr eq "MT"){
+                $chr_ch = 32;
+            }
+            if($chr eq "M"){
+                $chr_ch = 33;
+            }
+            if($alldat{$ass}{$id}{type} eq "dup"){
+    #		print "dup\n";
+            if($alldat{$ass}{$id}{posi} =~ /(\d+)_(\d+)/){
+                if(exists($conv{$id})){
+                    $reg = "chr$chr:$first-$second";
+                    $start = $first;
+                }
+                else{
+                    $reg = "chr$chr:$1-$2";
+                    $start = $1;
+                }
+            }
+            else{
+                if(exists($conv{$id})){
+                    $reg = "chr$chr:$first-$second";
+                    $start = $first;
+                }
+                else{
+                    $reg = "chr$chr:$alldat{$ass}{$id}{posi}-$alldat{$ass}{$id}{posi}";
+                    $start = $alldat{$ass}{$id}{posi};
+                }
+            }
+            
+            open(FH2, "samtools faidx $hg19 $reg  2>&1 |");
+            chomp(@REG = <FH2>);
+            close(FH2);
+    
+            shift(@REG);
+            $ref = join('', @REG);
+            $alt = $ref . $ref;
+    #		print "$reg\n$ref\n$alt\n$start\n";
+            if(length($ref) < 30) {
+                $outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$ref\t$alt\t100\t.\t$alc\tGT\t1/1";
+            }
 	    }
 	    
 	    if($alldat{$ass}{$id}{type} eq "del"){
 #		print "del\n$alldat{$ass}{$id}{posi}\n";
-		if($alldat{$ass}{$id}{posi} =~ /(\d+)_(\d+)/){
-		    if(exists($conv{$id})){
-			$start = $first - 1;
-			$end = $second;
-			$reg = "chr$chr:$start-$end";
-		    }
-		    else{
-			$start = $1 - 1;
-			$end = $2;
-			$reg = "chr$chr:$start-$end";
-		    }
-		}
-		else{
-		    if(exists($conv{$id})){
-			$start = $first - 1;
-			$end = $second;
-			
-		    }
-		    else{
-			 $start = $alldat{$ass}{$id}{posi} -1;
-			 $end = $alldat{$ass}{$id}{posi};
-		    }
-		    $reg = "chr$chr:$start-$end";
-		}
-#		print "$reg\n";
-		open(FH2, "samtools faidx $hg19 $reg  2>&1 |");
-
-		chomp(@REG = <FH2>);
-		close(FH2);
-		shift(@REG);
-
-		$ref = join('', @REG);
-		$alt = substr($ref, 0, 1);
-#		print "$ref $alt\n";
-		if(length($ref) < 30) {
-		    $outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$ref\t$alt\t100\t.\t$alc\tGT\t1/1";
-		}
-	    }
-	    if($alldat{$ass}{$id}{type} eq "ins"){
-#		print "ins\n";
-		if(exists($conv{$id})){
-		    $start = $first;
-		    $end = $second;
-		}
-		else{
-		    ($start, $end) = split(/_/, $alldat{$ass}{$id}{posi});
-		}
-		
-		$reg = "chr$chr:$start-$end";
-		$insert = $alldat{$ass}{$id}{insert};
-#		print "$reg\n";
-       
-		open(FH2, "samtools faidx $hg19 $reg  2>&1 |");
-		chomp(@REG = <FH2>);
-		close(FH2);
-		shift(@REG);
-		
-		$ref = join('', @REG);
-		$alt = $ref;
-
-#		print "$ref $alt\n";
-		substr($alt, 1, 0, $insert);
-
-		if(length($ref) < 20) {
-#		    print "chr$chr\t$start\t.\t$ref\t$alt\t.\t$alc\tGT\t1/1\n";
-		    $outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$ref\t$alt\t100\t.\t$alc\tGT\t1/1";
-		}
+            if($alldat{$ass}{$id}{posi} =~ /(\d+)_(\d+)/){
+                if(exists($conv{$id})){
+                    $start = $first - 1;
+                    $end = $second;
+                    $reg = "chr$chr:$start-$end";
+                }
+                else{
+                    $start = $1 - 1;
+                    $end = $2;
+                    $reg = "chr$chr:$start-$end";
+                }
+            }
+            else{
+                if(exists($conv{$id})){
+                    $start = $first - 1;
+                    $end = $second;
+                
+                }
+                else{
+                    $start = $alldat{$ass}{$id}{posi} -1;
+                     $end = $alldat{$ass}{$id}{posi};
+                }
+                $reg = "chr$chr:$start-$end";
+            }
+    #		print "$reg\n";
+            open(FH2, "samtools faidx $hg19 $reg  2>&1 |");
+    
+            chomp(@REG = <FH2>);
+            close(FH2);
+            shift(@REG);
+    
+            $ref = join('', @REG);
+            $alt = substr($ref, 0, 1);
+    #		print "$ref $alt\n";
+            if(length($ref) < 30) {
+                $outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$ref\t$alt\t100\t.\t$alc\tGT\t1/1";
+            }
+            }
+            if($alldat{$ass}{$id}{type} eq "ins"){
+    #		print "ins\n";
+            if(exists($conv{$id})){
+                $start = $first;
+                $end = $second;
+            }
+            else{
+                ($start, $end) = split(/_/, $alldat{$ass}{$id}{posi});
+            }
+            
+            $reg = "chr$chr:$start-$end";
+            $insert = $alldat{$ass}{$id}{insert};
+    #		print "$reg\n";
+           
+            open(FH2, "samtools faidx $hg19 $reg  2>&1 |");
+            chomp(@REG = <FH2>);
+            close(FH2);
+            shift(@REG);
+            
+            $ref = join('', @REG);
+            $alt = $ref;
+    
+    #		print "$ref $alt\n";
+            substr($alt, 1, 0, $insert);
+    
+            if(length($ref) < 20) {
+    #		    print "chr$chr\t$start\t.\t$ref\t$alt\t.\t$alc\tGT\t1/1\n";
+                $outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$ref\t$alt\t100\t.\t$alc\tGT\t1/1";
+            }
 	    }
 	    if($alldat{$ass}{$id}{type} eq "delins"){
 #		print "delins\n";
-		$insert = $alldat{$ass}{$id}{insert};
-
-		if($alldat{$ass}{$id}{posi} =~ /(\d+)_(\d+)/){
-		    if(exists($conv{$id})){
-			$start = $first - 1;
-			$end = $second;
-			$reg = "chr$chr:$start-$end";
-		    }
-		    else{
-			$start = $1 - 1;
-			$end = $2;
-			$reg = "chr$chr:$start-$end";
-		    } 
-		}
-		else{
-		    if(exists($conv{$id})){
-			$start = $first - 1;
-			$end = $second;
-		    }
-		    else{
-			$start = $alldat{$ass}{$id}{posi} -1;
-			$end = $alldat{$ass}{$id}{posi};
-		    } 
-		}		
-
-		$reg = "chr$chr:$start-$end";
-		open(FH2, "samtools faidx $hg19 $reg 2>&1 |");
-		chomp(@REG = <FH2>);
-		close(FH2);
-		shift(@REG);
-		$ref = join('', @REG);
-		$alt = substr($ref, 0, 1);
-		$alt .= $insert;
-
-#		print "$reg\n$ref $alt\n";
-		if(length($ref) < 30) {
-		    $outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$ref\t$alt\t100\t.\t$alc\tGT\t1/1";
-		}
+            $insert = $alldat{$ass}{$id}{insert};
+    
+            if($alldat{$ass}{$id}{posi} =~ /(\d+)_(\d+)/){
+                if(exists($conv{$id})){
+                $start = $first - 1;
+                $end = $second;
+                $reg = "chr$chr:$start-$end";
+                }
+                else{
+                $start = $1 - 1;
+                $end = $2;
+                $reg = "chr$chr:$start-$end";
+                } 
+            }
+            else{
+                if(exists($conv{$id})){
+                $start = $first - 1;
+                $end = $second;
+                }
+                else{
+                $start = $alldat{$ass}{$id}{posi} -1;
+                $end = $alldat{$ass}{$id}{posi};
+                } 
+            }		
+    
+            $reg = "chr$chr:$start-$end";
+            open(FH2, "samtools faidx $hg19 $reg 2>&1 |");
+            chomp(@REG = <FH2>);
+            close(FH2);
+            shift(@REG);
+            $ref = join('', @REG);
+            $alt = substr($ref, 0, 1);
+            $alt .= $insert;
+    
+    #		print "$reg\n$ref $alt\n";
+            if(length($ref) < 30) {
+                $outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$ref\t$alt\t100\t.\t$alc\tGT\t1/1";
+            }
 	    }
 	    if($alldat{$ass}{$id}{type} eq "subst"){
 #		print "$alldat{$ass}{$id}{type}\n";
-		if(exists($conv{$id})){
-		    $start = $first;
-		    $end = $second;
-		}
-		else{
-		    $start = $alldat{$ass}{$id}{posi};
-		    $end = $alldat{$ass}{$id}{posi};
-		} 
-
-		$outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$alldat{$ass}{$id}{baseFrom}\t$alldat{$ass}{$id}{baseTo}\t100\t.\t$alc\tGT\t1/1";
-#		print "$outdat{$chr_ch}{$start}\n";
-#		print "$chr\n";
-#		print "$start\n";
-#		print "$alldat{$ass}{$id}{baseFrom}\n";
-#		print "$alldat{$ass}{$id}{baseTo}\n";
-#		print "$alc\n";
-
-	    }
-#	    print "$ass $start $id\n---\n";
-	}
+            if(exists($conv{$id})){
+                $start = $first;
+                $end = $second;
+            }
+            else{
+                $start = $alldat{$ass}{$id}{posi};
+                $end = $alldat{$ass}{$id}{posi};
+            } 
+    
+            $outdat{$chr_ch}{$start} = "chr$chr\t$start\t.\t$alldat{$ass}{$id}{baseFrom}\t$alldat{$ass}{$id}{baseTo}\t100\t.\t$alc\tGT\t1/1";
+    #		print "$outdat{$chr_ch}{$start}\n";
+    #		print "$chr\n";
+    #		print "$start\n";
+    #		print "$alldat{$ass}{$id}{baseFrom}\n";
+    #		print "$alldat{$ass}{$id}{baseTo}\n";
+    #		print "$alc\n";
+    
+            }
+    #	    print "$ass $start $id\n---\n";
+        }
     }
 }
 
-$of2 = $of;
 $of = $of . ".tmp.vcf";
 open(OF, ">$of");
 
@@ -559,20 +541,27 @@ print OF "##contig=<ID=chrUn_gl000246,length=38154,assembly=hg19>\n";
 print OF "##contig=<ID=chrUn_gl000247,length=36422,assembly=hg19>\n";
 print OF "##contig=<ID=chrUn_gl000248,length=39786,assembly=hg19>\n";
 print OF "##contig=<ID=chrUn_gl000249,length=38502,assembly=hg19>\n";
-print OF "##INFO=<ID=ALCINDEX,Number=1,Type=String,Description=\"ALAMUT class index type\">\n";
-print OF "##INFO=<ID=ALCVAL,Number=1,Type=String,Description=\"ALAMUT class value\">\n";
+print OF "##INFO=<ID=CTYPE,Number=1,Type=String,Description=\"ALAMUT class index type\">\n";
+print OF "##INFO=<ID=CLEVEL,Number=1,Type=String,Description=\"ALAMUT class value\">\n";
 print OF "##INFO=<ID=ALAMUT,Number=1,Type=Integer,Description=\"Variant present in local Alamut mut repository\">\n";
+print OF "##INFO=<ID=CREATED,Number=1,Type=Integer,Description=\"Variant present in local Alamut mut repository\">\n";
+print OF "##INFO=<ID=UPDATED,Number=1,Type=Integer,Description=\"Variant present in local Alamut mut repository\">\n";
 print OF "##INFO=<ID=ALMUTID,Number=1,Type=String,Description=\"ALAMUT mutation id\">\n";
 print OF "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSample1\n";
 foreach $chr (sort { $a <=> $b } keys(%outdat)) {
     foreach $posi (sort { $a <=> $b } keys(%{$outdat{$chr}})) {
-	print OF "$outdat{$chr}{$posi}\n";
+		print OF "$outdat{$chr}{$posi}\n";
     }
 }
 close(OF);
 
-system("vt normalize $of -r $hg19 -o $of2");
+$of2 = $of;
+$of2 =~ s/.tmp.vcf/.vcf.gz/g;
 
+#system("vt normalize $of -r $hg19 -o $of2");
+#system("vt decompose -s $of | vt normalize - -r $c{'genome'} ");
+system("vt decompose -s $of | vt normalize -r $c{'genome'} - | vt sort - | vt uniq - | bgzip -c >$of2");
+system("tabix -p vcf $of2");
 system("rm $of");
 
 sub rc {
